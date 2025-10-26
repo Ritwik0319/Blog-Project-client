@@ -4,8 +4,8 @@ import { useAppContext } from '../../context/AppContext'
 
 const Login = () => {
   const { axios, setToken } = useAppContext()
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
+  const [email, setEmail] = useState('admin1234@gmail.com')
+  const [password, setPassword] = useState('123456')
   const handleSubmit = async (e) => {
     e.preventDefault()
     try {
