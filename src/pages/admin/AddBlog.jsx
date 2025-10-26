@@ -2,8 +2,14 @@ import React, { useEffect, useRef, useState } from 'react'
 import { assets, blogCategories } from '../../assets/assets'
 import Quill from "quill"
 import "quill/dist/quill.snow.css"
+import toast from "react-hot-toast"
+import { useAppContext } from '../../context/AppContext'
+import { parse } from "marked"
 
 const AddBlog = () => {
+  const { axios } = useAppContext()
+  const [isAdding, setIsAdding] = useState(false)
+  const [isLoading, setIsLoading] = useState(false)
   const [image, setImage] = useState(null)
   const [title, setTitle] = useState("")
   const [subTitle, setSubtitle] = useState("")
@@ -13,14 +19,66 @@ const AddBlog = () => {
   const quillRef = useRef(null)
 
   const handleSubmit = async (e) => {
-    e.preventDefault()
-    const content = quillRef.current.root.innerHTML
-    console.log({ title, subTitle, content, category, isPublished })
-  }
+    e.preventDefault();
+    setIsAdding(true);
 
-  const generateContent = () => {
-    const html = quillRef.current.root.innerHTML
-    console.log("Editor content:", html)
+    try {
+      const description = quillRef.current.root.innerHTML.trim();
+
+      if (!title || !subTitle || !description || !category || !image) {
+        toast.error("Please fill in all required fields including image");
+        setIsAdding(false);
+        return;
+      }
+
+      const formData = new FormData();
+      formData.append("title", title);
+      formData.append("subTitle", subTitle);
+      formData.append("description", description);
+      formData.append("category", category);
+      formData.append("isPublished", JSON.stringify(isPublished));
+      formData.append("image", image);
+
+      const { data } = await axios.post("api/admin/postblog", formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+
+      if (data.success) {
+        toast.success("Blog created successfully");
+        setTitle("");
+        setSubtitle("");
+        setCategory("Startup");
+        setIsPublished(false);
+        setImage(null);
+        quillRef.current.root.innerHTML = "";
+      } else {
+        toast.error(data.message || "Failed to create blog");
+      }
+    } catch (error) {
+      console.error("Error while adding blog:", error);
+      toast.error(error.response?.data?.message || "Internal server error");
+    } finally {
+      setIsAdding(false);
+    }
+  };
+
+  const generateContent = async () => {
+    if (!title) return toast.error('please enter a title');
+
+    try {
+      setIsLoading(true)
+      const { data } = await axios.post("/api/blog/generate", { prompt: title })
+      if (data.success) {
+
+        quillRef.current.root.innerHTML = parse(data.content)
+      } else {
+        toast.error(data.message)
+      }
+    } catch (error) {
+      toast.error(error.message)
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   useEffect(() => {
@@ -32,9 +90,16 @@ const AddBlog = () => {
     }
   }, [])
 
+  useEffect(() => {
+    if (image) {
+      const previewUrl = URL.createObjectURL(image);
+      return () => URL.revokeObjectURL(previewUrl);
+    }
+  }, [image]);
+
   return (
     <form onSubmit={handleSubmit} className='flex-1 bg-blue-50/50 text-gray-600 h-full overflow-scroll'>
-      <div className='bg-white w-full max-w-3xl p-4 md:p-10 sm:m-10 shadow rounded'>
+      <div className='bg-white w-full sm:w-auto max-w-3xl p-4 md:p-10 sm:m-10 shadow rounded'>
         <p>Upload Thumbnail</p>
         <label htmlFor="image">
           <img
@@ -56,6 +121,7 @@ const AddBlog = () => {
           type="text"
           placeholder='type here'
           required
+          disabled={isAdding}
           className='w-full max-w-lg mt-2 p-2 border border-gray-300 outline-none rounded'
           onChange={e => setTitle(e.target.value)}
           value={title}
@@ -66,6 +132,7 @@ const AddBlog = () => {
           type="text"
           placeholder='type here'
           required
+          disabled={isAdding}
           className='w-full max-w-lg mt-2 p-2 border border-gray-300 outline-none rounded'
           onChange={e => setSubtitle(e.target.value)}
           value={subTitle}
@@ -74,8 +141,14 @@ const AddBlog = () => {
         <p className='mt-4'>Blog Description</p>
         <div className='max-w-lg h-74 pb-16 sm:pb-10 pt-2 relative'>
           <div ref={editorRef}></div>
+          {isLoading && (
+            <div className='absolute right-0 top-0 bottom-0 left-0 flex items-center justify-center bg-black/10 mt-2'>
+              <div className='w-8 h-8 rounded-full border-2 border-t-white animate-spin'></div>
+            </div>
+          )}
           <button
             type="button"
+            disabled={isLoading}
             onClick={generateContent}
             className='absolute bottom-1 right-2 ml-2 text-xs text-white bg-black/70 px-4 py-1.5 rounded hover:underline cursor-pointer'
           >
@@ -84,17 +157,34 @@ const AddBlog = () => {
         </div>
 
         <p className='mt-4'>Blog Category</p>
-        <select onChange={e => setCategory(e.target.value)} name='category' className='mt-2 px-3 py-2 border text-gray-500 border-gray-300 outline-none rounded'>
-          <option value="">Select category</option>
-          {blogCategories.map((item, i) => <option key={i} value={item}>{item}</option>)}
+        <select
+          onChange={e => setCategory(e.target.value)}
+          name='category'
+          value={category}
+          className='mt-2 px-3 py-2 border text-gray-500 border-gray-300 outline-none rounded'
+        >
+          {blogCategories.map((item, i) => (
+            <option key={i} value={item}>{item}</option>
+          ))}
         </select>
 
         <div className='flex gap-2 mt-4'>
           <p>Publish now</p>
-          <input onChange={e => setIsPublished(e.target.checked)} type="checkbox" checked={isPublished} className='scale:125 cursor-pointer' />
+          <input
+            onChange={e => setIsPublished(e.target.checked)}
+            type="checkbox"
+            checked={isPublished}
+            className='scale-125 cursor-pointer'
+          />
         </div>
 
-        <button type="submit" className='mt-8 w-40 h-10 bg-primary text-white rounded cursor-pointer text-sm'>Add Blog</button>
+        <button
+          disabled={isAdding}
+          type="submit"
+          className='mt-8 w-40 h-10 bg-primary text-white rounded cursor-pointer text-sm'
+        >
+          {isAdding ? "Adding..." : "Add Blog"}
+        </button>
       </div>
     </form>
   )

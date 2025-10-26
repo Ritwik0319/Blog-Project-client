@@ -1,39 +1,67 @@
 import React, { useEffect, useState } from 'react'
 import NavBar from "../components/NavBar.jsx"
 import { useParams } from 'react-router-dom'
-import { assets, blog_data, comments_data } from '../assets/assets.js'
+import { assets } from '../assets/assets.js'
 import moment from "moment"
 import Footer from '../components/Footer.jsx'
 import Loader from '../components/Loader.jsx'
+import toast from 'react-hot-toast'
+import { useAppContext } from '../context/AppContext.jsx'
 
 const Blog = () => {
   const { id } = useParams()
+  const { axios } = useAppContext()
   const [data, setData] = useState(null)
-  const [comments, setComments] = useState(null)
+  const [comments, setComments] = useState([])
 
   const [name, setName] = useState("")
   const [content, setContent] = useState("")
 
   const getData = async () => {
-    const data = blog_data.find(val => val._id === id)
-    setData(data)
+    try {
+      const { data } = await axios.get(`api/blog/getblog/${id}`)
+      data.success ? setData(data.blog) : toast.error(data.message)
+      // console.log(data);
+      
+    } catch (error) {
+      toast.error(error.message)
+    }
   }
 
   const getComments = async () => {
-    setComments(comments_data)
+    try {
+      const { data } = await axios.post(`/api/blog/comments`, { blogId: id })
+      if (data.success) {
+        setComments(data.comments)
+      } else {
+        toast.error(data.message)
+      }
+    } catch (error) {
+      toast.error(error.message)
+
+    }
   }
 
-  const addComment = (e) => {
+  const addComment = async (e) => {
     e.preventDefault()
+    try {
+      const { data } = await axios.post(`/api/blog/add-comment`, { blog: id, name, content })
+      if (data.success) {
+        toast.success(data.message)
+        setName("")
+        setContent("")
+      } else {
+        toast.error(data.message)
+      }
+    } catch (error) {
+      toast.success(error.message)
+    }
   }
 
   useEffect(() => {
     getData()
     getComments()
   }, [id])
-
-  console.log(data)
-  console.log(comments)
 
 
   return data ? (
@@ -42,16 +70,16 @@ const Blog = () => {
 
       <div className='relative'>
 
-        <img src={assets.gradientBackground} alt="gradient-Background" className='absolute -top-50 -z-1 opacity-50' />
+        <img src={assets.gradientBackground} alt="gradient-Background"  className='absolute -top-50 -z-1 opacity-50' />
 
         <div className='text-center mt-20 text-gray-600'>
           <p className='text-primary py-4 font-medium'>Published on {moment(data.createdAt).format("MMMM Do YYYY")}</p>
           <h1 className='text-2xl sm:text:5xl font-semibold max-w-2xl mx-auto text-gray-800'>{data.title}</h1>
           <h2 className='my-5 max-w-lg truncate mx-auto'>{data.subTitle}</h2>
-          <p className='inline-block py-1 px-4 rounde-full mb-6 border text-sm  border-primary/35 bg-primary/5 font-medium text-primary'>Michael Brown</p>
+          <p className='inline-block py-1 px-4 rounded-full mb-6 border text-sm  border-primary/35 bg-primary/5 font-medium text-primary'>Michael Brown</p>
         </div>
 
-        <div className='mx-5 max-w-5xl md:mx-auto my-10 mt-6'>
+        <div className='mx-5 max-w-5xl  md:mx-auto md:mx-10xl my-10 mt-6'>
 
           <img src={data.image} alt={data.title} className='rounded-3xl mb-5' />
 
@@ -101,7 +129,7 @@ const Blog = () => {
 
         </div>
       </div>
-        <Footer />
+      <Footer />
     </div>
 
   ) : <Loader />
